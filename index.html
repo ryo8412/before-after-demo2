@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8" />
-  <title>Before-After スライダー（伸縮なし）</title>
+  <title>Before-After スライダー（ノブ操作のみ）</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
     :root { --maxw: 1100px; }
@@ -22,9 +22,10 @@
       background: #000;
       user-select: none;
       touch-action: none;
-      /* after画像の実寸で縦横比固定（JSで設定） */
+      /* aspect-ratio は after 画像の実寸で JS が設定 */
     }
-    /* 両画像は常にコンテナと同じサイズ。伸縮させない */
+
+    /* 両画像は常に同サイズ。伸縮させない */
     .ba img {
       position: absolute;
       inset: 0;
@@ -33,12 +34,14 @@
       object-fit: cover;
       display: block;
     }
-    /* before画像は clip-path で見える範囲だけを変える */
+
+    /* before は clip-path でマスクだけを動かす */
     .ba .before {
       will-change: clip-path;
       clip-path: polygon(0 0, 50% 0, 50% 100%, 0 100%);
     }
 
+    /* 線（ハンドルのレール） */
     .handle {
       position: absolute;
       inset: 0 auto 0 50%;
@@ -47,9 +50,29 @@
       border-left: 1px solid rgba(0,0,0,.45);
       border-right: 1px solid rgba(0,0,0,.45);
       box-shadow: 0 0 0 1px rgba(255,255,255,.5);
-      cursor: ew-resize;
       z-index: 2;
+      pointer-events: none; /* 線自体はドラッグ不可 */
     }
+
+    /* 丸ノブ：ここだけドラッグ可 */
+    .knob {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      width: 46px;
+      height: 46px;
+      border-radius: 50%;
+      background: #fff;
+      border: 2px solid rgba(0,0,0,.35);
+      box-shadow: 0 4px 10px rgba(0,0,0,.25), 0 0 0 3px rgba(255,255,255,.8) inset;
+      z-index: 3;
+      cursor: ew-resize;
+      touch-action: none;
+    }
+
+    /* フォーカス可（キーボード操作したい場合） */
+    .knob:focus { outline: 3px solid #0b62d6; }
   </style>
 </head>
 <body>
@@ -89,11 +112,12 @@
       const probe = new Image();
       probe.src = afterSrc;
       probe.onload = () => {
-        // 縦横比を固定（伸縮防止）
+        // アスペクト比固定（伸縮防止）
         container.style.aspectRatio = `${probe.naturalWidth} / ${probe.naturalHeight}`;
 
+        // 画像とUIを配置
         const after  = document.createElement('img');
-        after.src = afterSrc;  after.alt = 'after';
+        after.src = afterSrc; after.alt = 'after';
 
         const before = document.createElement('img');
         before.src = beforeSrc; before.alt = 'before'; before.className = 'before';
@@ -101,28 +125,56 @@
         const handle = document.createElement('div');
         handle.className = 'handle';
 
+        const knob = document.createElement('button');
+        knob.className = 'knob';
+        knob.setAttribute('aria-label', 'スライダー位置を調整');
+        knob.type = 'button';
+
         container.appendChild(after);
         container.appendChild(before);
         container.appendChild(handle);
+        container.appendChild(knob);
 
         let dragging = false;
 
-        const setPos = (xClient) => {
+        const setPos = (clientX) => {
           const r = container.getBoundingClientRect();
-          const x = Math.max(0, Math.min(xClient - r.left, r.width));
+          const x = Math.max(0, Math.min(clientX - r.left, r.width));
           const p = (x / r.width) * 100;
           before.style.clipPath = `polygon(0 0, ${p}% 0, ${p}% 100%, 0 100%)`;
           handle.style.left = p + '%';
+          knob.style.left   = p + '%';
         };
 
-        container.addEventListener('pointerdown', (e) => { dragging = true; setPos(e.clientX); });
-        window.addEventListener('pointermove', (e) => { if (dragging) setPos(e.clientX); });
-        window.addEventListener('pointerup',   ()  => { dragging = false; });
+        // ノブのみドラッグ可（クリック移動は無し）
+        knob.addEventListener('pointerdown', (e) => {
+          dragging = true;
+          knob.setPointerCapture(e.pointerId);
+          e.preventDefault();
+        });
+        knob.addEventListener('pointermove', (e) => {
+          if (!dragging) return;
+          setPos(e.clientX);
+        });
+        knob.addEventListener('pointerup', () => { dragging = false; });
 
-        // タッチでも動作
-        container.addEventListener('touchstart', (e) => { dragging = true; setPos(e.touches[0].clientX); }, {passive:false});
-        window.addEventListener('touchmove', (e) => { if (dragging) setPos(e.touches[0].clientX); }, {passive:false});
+        // タッチ（Mobile）
+        knob.addEventListener('touchstart', (e) => { dragging = true; e.preventDefault(); }, {passive:false});
+        window.addEventListener('touchmove', (e) => {
+          if (!dragging) return;
+          setPos(e.touches[0].clientX);
+        }, {passive:false});
         window.addEventListener('touchend', () => { dragging = false; });
+
+        // 任意：キーボードで微調整（←/→）
+        knob.tabIndex = 0;
+        knob.addEventListener('keydown', (e) => {
+          const r = container.getBoundingClientRect();
+          const current = parseFloat(handle.style.left || '50%') / 100 * r.width;
+          const step = (e.shiftKey ? 20 : 10); // px
+          if (e.key === 'ArrowLeft')  setPos(r.left + current - step);
+          if (e.key === 'ArrowRight') setPos(r.left + current + step);
+        });
       };
     }
 
