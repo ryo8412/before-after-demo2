@@ -22,10 +22,8 @@
       background: #000;
       user-select: none;
       touch-action: none;
-      /* aspect-ratio は after 画像の実寸で JS が設定 */
     }
 
-    /* 両画像は常に同サイズ。伸縮させない */
     .ba img {
       position: absolute;
       inset: 0;
@@ -35,13 +33,11 @@
       display: block;
     }
 
-    /* before は clip-path でマスクだけを動かす */
     .ba .before {
       will-change: clip-path;
       clip-path: polygon(0 0, 50% 0, 50% 100%, 0 100%);
     }
 
-    /* 線（ハンドルのレール） */
     .handle {
       position: absolute;
       inset: 0 auto 0 50%;
@@ -51,10 +47,9 @@
       border-right: 1px solid rgba(0,0,0,.45);
       box-shadow: 0 0 0 1px rgba(255,255,255,.5);
       z-index: 2;
-      pointer-events: none; /* 線自体はドラッグ不可 */
+      pointer-events: none;
     }
 
-    /* 丸ノブ：ここだけドラッグ可 */
     .knob {
       position: absolute;
       left: 50%;
@@ -71,8 +66,28 @@
       touch-action: none;
     }
 
-    /* フォーカス可（キーボード操作したい場合） */
     .knob:focus { outline: 3px solid #0b62d6; }
+
+    /* ラベル共通 */
+    .ba-label {
+      position: absolute;
+      padding: 4px 10px;
+      font-size: 16px;
+      font-weight: bold;
+      color: #fff;
+      background: rgba(0,0,0,0.55);
+      border-radius: 4px;
+      z-index: 4;
+      pointer-events: none;
+    }
+    .ba-label.before-label {
+      bottom: 8px;
+      left: 8px;
+    }
+    .ba-label.after-label {
+      bottom: 8px;
+      right: 8px;
+    }
   </style>
 </head>
 <body>
@@ -112,10 +127,8 @@
       const probe = new Image();
       probe.src = afterSrc;
       probe.onload = () => {
-        // アスペクト比固定（伸縮防止）
         container.style.aspectRatio = `${probe.naturalWidth} / ${probe.naturalHeight}`;
 
-        // 画像とUIを配置
         const after  = document.createElement('img');
         after.src = afterSrc; after.alt = 'after';
 
@@ -130,13 +143,24 @@
         knob.setAttribute('aria-label', 'スライダー位置を調整');
         knob.type = 'button';
 
+        /* === ラベル追加 === */
+        const beforeLabel = document.createElement('div');
+        beforeLabel.className = 'ba-label before-label';
+        beforeLabel.textContent = '2017年7月';
+
+        const afterLabel = document.createElement('div');
+        afterLabel.className = 'ba-label after-label';
+        afterLabel.textContent = '2025年7月';
+
         container.appendChild(after);
         container.appendChild(before);
         container.appendChild(handle);
         container.appendChild(knob);
+        container.appendChild(beforeLabel);
+        container.appendChild(afterLabel);
+        /* === ここまで === */
 
         let dragging = false;
-
         const setPos = (clientX) => {
           const r = container.getBoundingClientRect();
           const x = Math.max(0, Math.min(clientX - r.left, r.width));
@@ -146,7 +170,6 @@
           knob.style.left   = p + '%';
         };
 
-        // ノブのみドラッグ可（クリック移動は無し）
         knob.addEventListener('pointerdown', (e) => {
           dragging = true;
           knob.setPointerCapture(e.pointerId);
@@ -158,7 +181,6 @@
         });
         knob.addEventListener('pointerup', () => { dragging = false; });
 
-        // タッチ（Mobile）
         knob.addEventListener('touchstart', (e) => { dragging = true; e.preventDefault(); }, {passive:false});
         window.addEventListener('touchmove', (e) => {
           if (!dragging) return;
@@ -166,12 +188,11 @@
         }, {passive:false});
         window.addEventListener('touchend', () => { dragging = false; });
 
-        // 任意：キーボードで微調整（←/→）
         knob.tabIndex = 0;
         knob.addEventListener('keydown', (e) => {
           const r = container.getBoundingClientRect();
           const current = parseFloat(handle.style.left || '50%') / 100 * r.width;
-          const step = (e.shiftKey ? 20 : 10); // px
+          const step = (e.shiftKey ? 20 : 10);
           if (e.key === 'ArrowLeft')  setPos(r.left + current - step);
           if (e.key === 'ArrowRight') setPos(r.left + current + step);
         });
